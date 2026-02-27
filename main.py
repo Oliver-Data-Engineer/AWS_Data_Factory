@@ -1,11 +1,14 @@
+import DataUtils
 from classes.AwsClient import AWSClient
 from classes.S3Manager import S3Manager
 from classes.GlueManager import GlueManager
 from classes.AthenaManager import AthenaManager
+from classes.Utils import Utils
 from time import sleep
 import sys
 from typing import Optional
-
+from classes.DataUtils import DataUtils
+from classes.genericLogger import GenericLogger
 
 def arquitetura_temp_sql():
     aws = AWSClient(service_name="s3", region_name="us-east-2")
@@ -116,72 +119,65 @@ def s3_init_etl(args: dict) -> dict:
 
 
 if __name__ == "__main__":
-    sql = '''
-    WITH parametro AS (
-    SELECT date_parse('{anomesdia}', '%Y%m%d') AS data_referencia
-),
-
-limites AS (
-    SELECT
-        date_trunc('month', data_referencia)              AS data_inicio,
-        date_add(
-            'day',
-            -1,
-            date_add('month', 1, date_trunc('month', data_referencia))
-        )                                                 AS data_fim
-    FROM parametro
-)
-
-SELECT
-    d                                           AS data,
-    date_format(d, '%Y%m%d')                    AS anomesdia,
-    day(d)                                      AS dia,
-    week(d)                                     AS semana_ano,
-    day_of_week(d)                              AS dia_semana,
-    date_format(d, '%W')                        AS nome_dia,
-    quarter(d)                                  AS trimestre,
-    year(d)                                     AS ano,
-    month(d)                                    AS mes
-FROM limites
-CROSS JOIN UNNEST(
-    sequence(data_inicio, data_fim, interval '1' day)
-) AS t(d)
-ORDER BY data
-
-    '''
     # Simulação de argumentos para teste local
     job_args = {
         'db': 'workspace_db',
         'table_name': 'calendario_mensal',
         'path_sql_origem': 's3://sql-center-903146277540/sql_center/tabela_calendario.sql',
-        'region_name': 'us-east-2'
+        'region_name': 'us-east-2',
+        'partition_name': 'anomesdia'
+
     }
 
     try:
         glue = GlueManager(region_name=job_args['region_name'])
         athena = AthenaManager(region_name=job_args['region_name'])
         s3 = S3Manager(region_name=job_args['region_name'])
+        logger = GenericLogger(name="GlueManager", level="INFO")
+        # arquitetura_temp_sql()
         data_setup = s3_init_etl(args=job_args)
-        
+                
         if glue.table_exists(db=job_args['db'], table=job_args['table_name']):
-            print("Tabela existe no Glue. Executando query de teste no Athena...")
+            logger.info("Tabela existe no Glue. Executando query de teste no Athena...")
 
-            s3.clean_partition(
-            s3_uri=data_setup['structure']['data'],
-            partition_names=["ano", "mes"],
-            partition_values=[2023, 1])
-            
-            # Exemplo de query simples para testar a conexão com o Athena
-            athena.unload_to_s3(
-                sql=data_setup.get("query", 'SELECT 1'),
-                target_s3_path=data_setup['structure']['data'],
-                database=job_args['db'],
-                temp_s3=data_setup['structure']['temp'],
-                partition_names=["ano", "mes"],
-                sql_params={"anomesdia": '20230101'}
+            lista_processamento = DataUtils.generate_partitions(
+                p_type=job_args['partition_name'],
+                reprocessamento=True,
+                range_reprocessamento=6
             )
-        else:
-            print("Tabela não existe no Glue.")
 
+            logger.info(f"Lista de partições a processar: {lista_processamento}")
+            
+            for part in lista_processamento:
+                logger.info(f"Processando partição: {part}")
+                s3.clean_partition(
+                s3_uri=data_setup['structure']['data'],
+                partition_names=[job_args['partition_name']],
+                partition_values=[part])
+            
+                # Exemplo de query simples para testar a conexão com o Athena
+                athena.unload_to_s3(
+                    sql=data_setup.get("query", 'SELECT 1'),
+                    target_s3_path=data_setup['structure']['data'],
+                    database=job_args['db'],
+                    temp_s3=data_setup['structure']['temp'],
+                    partition_names=[job_args['partition_name']],
+                    sql_params={job_args['partition_name']: part}
+                )
+                logger.debug(f'Query em execução: {data_setup.get("query", "SELECT 1")}')
+                logger.info(f"Partição {part} processada com sucesso.")
+            
+            logger.info("Processamento concluído para todas as partições.")
+        else:
+            logger.info("Tabela não existe no Glue. Criando tabela via CTAS...")
+
+            create_response = athena.create_table_as_select(
+                sql=data_setup.get("query", 'SELECT 1'),
+                target_db=job_args['db'],
+                target_table=job_args['table_name'],
+                s3_path_target=data_setup['structure']['data'],
+                temp_s3=data_setup['structure']['temp'],
+                partition_names=[job_args['partition_name']],
+                sql_params={job_args['partition_name']: job_args['partition_value']})
     except Exception as e:
-        print(f"Erro ao verificar tabela no Glue: {e}")
+        logger.error(f"Erro ao verificar tabela no Glue: {e}")

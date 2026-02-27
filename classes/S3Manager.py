@@ -529,4 +529,54 @@ class S3Manager(AWSClient):
         except Exception as e:
             self.logger.error(f"Erro ao copiar de {source_path} para {target_path}: {e}", exc_info=True)
             raise
+    
+    def delete_prefix(self, bucket: str, prefix: str) -> int:
+        """
+        Deleta recursivamente todos os objetos sob um prefixo específico.
         
+        Args:
+            bucket (str): Nome do bucket.
+            prefix (str): O prefixo (pasta) a ser limpo.
+            
+        Returns:
+            int: Total de objetos deletados.
+        """
+        clean_bucket = self._sanitize_bucket_name(bucket)
+        clean_prefix = self._normalize_path(prefix)
+
+        # Proteção Crítica: Evita deletar o bucket inteiro se o prefixo vier vazio
+        if not clean_prefix or clean_prefix == "/":
+            self.logger.error(f"Tentativa de deleção em prefixo raiz abortada por segurança no bucket: {clean_bucket}")
+            raise ValueError("O prefixo de deleção não pode ser vazio ou a raiz.")
+
+        self.logger.info(f"Iniciando limpeza do prefixo: s3://{clean_bucket}/{clean_prefix}")
+
+        total_deleted = 0
+        try:
+            # O paginator é essencial: o S3 limita a listagem a 1000 objetos por chamada.
+            paginator = self.client.get_paginator('list_objects_v2')
+            
+            for page in paginator.paginate(Bucket=clean_bucket, Prefix=clean_prefix):
+                if 'Contents' in page:
+                    # Prepara o lote de objetos (Máximo 1000 por requisição de deleção)
+                    delete_list = [{'Key': obj['Key']} for obj in page['Contents']]
+                    
+                    self.client.delete_objects(
+                        Bucket=clean_bucket,
+                        Delete={'Objects': delete_list, 'Quiet': True}
+                    )
+                    
+                    batch_count = len(delete_list)
+                    total_deleted += batch_count
+                    self.logger.debug(f"Lote de {batch_count} objetos removido.")
+
+            if total_deleted > 0:
+                self.logger.info(f"Sucesso: {total_deleted} objetos removidos de {clean_prefix}.")
+            else:
+                self.logger.info(f"O prefixo {clean_prefix} já estava limpo.")
+
+            return total_deleted
+
+        except Exception as e:
+            self.logger.error(f"Erro crítico ao deletar prefixo {clean_prefix}: {e}", exc_info=True)
+            raise

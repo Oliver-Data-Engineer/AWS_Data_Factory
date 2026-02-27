@@ -1,12 +1,5 @@
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
-acess_key = os.getenv("ACESS_KEY")
-secret_key = os.getenv("ACESS_KEY")
 
 
 
@@ -14,7 +7,7 @@ class AWSClient:
     def __init__(self, service_name, region_name="us-east-2"):
         self.session = boto3.Session()
         self.region = region_name
-        self.client = self.session.client(service_name, region_name=region_name, aws_access_key_id = acess_key, aws_secret_access_key = secret_key )
+        self.client = self.session.client(service_name, region_name=region_name )
         # Atributo privado para cache
         self._account_id = None
 

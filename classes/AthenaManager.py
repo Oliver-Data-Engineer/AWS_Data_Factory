@@ -18,6 +18,8 @@ class AthenaManager(AWSClient):
         self.glue = GlueManager(region_name=region_name)
         self.logger.info(f"AthenaManager inicializado na região: {region_name}")
 
+        self.region_name = region_name
+
     # --- MÉTODOS PRIVADOS DE SUPORTE ---
 
     def _wait_for_query(self, query_id: str, timeout: int = 300) -> str:
@@ -107,39 +109,87 @@ class AthenaManager(AWSClient):
         self.logger.info(f"Disparando UNLOAD DIRETO para a pasta: {final_target}")
         return self.execute_query(unload_query, database, temp_s3)
     
-    def create_table_as_select(self, target_db: str, target_table: str, sql: str, 
-                               s3_path: str, temp_s3: str, partition_val: int, 
-                               overwrite: bool = True) -> Dict:
+    def create_table_as_select(
+        self, 
+        target_db: str, 
+        target_table: str, 
+        sql: str, 
+        s3_path_target: str, 
+        temp_s3: str, 
+        partition_names: list | str, 
+        sql_params: Dict[str, Any],
+        overwrite: bool = True
+    ) -> Dict:
         """
-        Cria uma tabela via CTAS (Create Table As Select).
+        Cria uma tabela via CTAS (Create Table As Select) no Athena.
+        Realiza limpeza automática do S3 para evitar HIVE_PATH_ALREADY_EXISTS.
         """
-        self.logger.info(f"Executando CTAS para {target_db}.{target_table}")
-        
-        if overwrite:
-            self.execute_query(f"DROP TABLE IF EXISTS {target_db}.{target_table}", target_db, temp_s3)
+        self.logger.info(f"Iniciando processo CTAS para {target_db}.{target_table}")
+        start_time = time.time()
 
-        formatted_sql = sql.format(anomes=partition_val)
-        
+        # 1. Normalização de Partições
+        names = [partition_names] if isinstance(partition_names, str) else partition_names
+        cols_array = ", ".join([f"'{name}'" for name in names])
+
+        # 2. Resolução do SQL e Limpeza de Semicolon
+        try:
+            formatted_sql = sql.format(**sql_params).strip().rstrip(";")
+        except KeyError as e:
+            self.logger.error(f"Parâmetro {e} ausente no dicionário sql_params.")
+            raise
+
+        # 3. Gestão de Overwrite (Drop + S3 Purge)
+        clean_target = f"{s3_path_target.rstrip('/')}/"
+        if overwrite:
+            self.logger.info(f"Overwrite habilitado. Preparando terreno em {clean_target}")
+            
+            # Drop da tabela no Glue
+            self.execute_query(f"DROP TABLE IF EXISTS {target_db}.{target_table}", target_db, temp_s3)
+            
+            # Limpeza física do S3 (Fundamental para evitar erro de diretório já existente)
+            # Aqui usamos o delete_prefix que criamos no S3Manager
+            # Assumindo que s3_manager está disponível ou injetado
+            from .S3Manager import S3Manager
+            s3_client = S3Manager(region_name=self.region_name)
+            s3_client.delete_prefix(bucket=self._extract_bucket(clean_target), 
+                                  prefix=self._extract_prefix(clean_target))
+
+        # 4. Construção da Query CTAS
         ctas_query = f"""
             CREATE TABLE {target_db}.{target_table}
             WITH (
                 format = 'PARQUET',
-                external_location = '{s3_path.rstrip('/')}/',
-                partitioned_by = ARRAY['anomes']
+                external_location = '{clean_target}',
+                partitioned_by = ARRAY[{cols_array}]
             )
             AS {formatted_sql}
         """
-        
-        start = time.time()
-        query_id = self.execute_query(ctas_query, target_db, temp_s3)
-        elapsed = round(time.time() - start, 2)
 
-        return {
-            "status": "Success",
-            "table": f"{target_db}.{target_table}",
-            "elapsed_sec": elapsed,
-            "query_id": query_id
-        }
+        self.logger.debug(f"Executando CTAS Query:\n{ctas_query}")
+        
+        try:
+            query_id = self.execute_query(ctas_query, target_db, temp_s3)
+            elapsed = round(time.time() - start_time, 2)
+            
+            self.logger.info(f"Tabela {target_db}.{target_table} criada com sucesso em {elapsed}s.")
+            
+            return {
+                "status": "Success",
+                "table": f"{target_db}.{target_table}",
+                "location": clean_target,
+                "elapsed_sec": elapsed,
+                "query_id": query_id
+            }
+        except Exception as e:
+            self.logger.error(f"Falha na execução do CTAS: {e}")
+            raise
+
+    def _extract_bucket(self, s3_uri: str) -> str:
+        return s3_uri.replace("s3://", "").split("/")[0]
+
+    def _extract_prefix(self, s3_uri: str) -> str:
+        parts = s3_uri.replace("s3://", "").split("/", 1)
+        return parts[1] if len(parts) > 1 else ""
 
     # --- GESTÃO DE PARTIÇÕES (Integração Glue) ---
 
