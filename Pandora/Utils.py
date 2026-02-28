@@ -3,7 +3,7 @@ import os
 import sqlglot
 from sqlglot import exp
 from typing import List, Dict, Optional, Set, Any
-from .genericLogger import GenericLogger # Mantendo o padrão de logs
+from genericLogger import GenericLogger # Mantendo o padrão de logs
 
 class Utils:
     """

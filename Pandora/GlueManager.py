@@ -2,10 +2,10 @@ import boto3
 import time
 import copy
 from typing import Optional, Dict, List, Any
-from .AwsClient import AWSClient
-from .genericLogger import GenericLogger
-from .Clock import Clock
-from .Utils import Utils # Importação para linhagem
+from AwsClient import AWSClient
+from genericLogger import GenericLogger
+from Clock import Clock
+from Utils import Utils # Importação para linhagem
 from botocore.exceptions import ClientError
 
 class GlueManager(AWSClient):

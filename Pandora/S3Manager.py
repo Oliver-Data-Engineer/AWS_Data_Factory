@@ -1,9 +1,9 @@
 import boto3
 from typing import Optional, Dict, List, Any
-from .AwsClient import AWSClient
+from AwsClient import AWSClient
 from botocore.exceptions import ClientError
-from .genericLogger import GenericLogger
-from .Clock import Clock
+from genericLogger import GenericLogger
+from Clock import Clock
 
 class S3Manager(AWSClient):
     """

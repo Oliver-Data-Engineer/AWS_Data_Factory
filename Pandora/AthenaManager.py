@@ -2,10 +2,10 @@ import boto3
 import time
 import copy
 from typing import Optional, Dict, List, Any
-from .AwsClient import AWSClient
-from .GlueManager import GlueManager
-from .genericLogger import GenericLogger
-from .Clock import Clock
+from AwsClient import AWSClient
+from GlueManager import GlueManager
+from genericLogger import GenericLogger
+from Clock import Clock
 
 class AthenaManager(AWSClient):
     """
