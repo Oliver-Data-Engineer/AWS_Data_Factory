@@ -9,6 +9,7 @@ from classes.ReportManager import ReportManager
 from classes.LocalTest import salvar_arquivo
 from classes.MetadataManager import MetadataManager
 from classes.Clock import Clock
+from classes.Utils import Utils
 
 
 def s3_init_etl(args: dict, logger_name: str) -> dict:
@@ -19,15 +20,13 @@ def s3_init_etl(args: dict, logger_name: str) -> dict:
 
     # 1. Setup de Pastas (Bootstrap)
     structure = s3.setup_project(bucket_name=bucket_name, project_name=project_name)
-    if args.get('query',None) == None: 
-        # 2. Movimentação do SQL para o ambiente do projeto
-        s3.copy_file(source_file_uri=args['path_sql_origem'], target_folder_uri=structure['sql'])
-        
-        # 3. Leitura do Conteúdo SQL
-        filename = s3.get_filename_from_uri(args['path_sql_origem'])
-        query = s3.get_content_sql(bucket=bucket_name, prefix=f"{project_name}/sql", filename=filename)
-    else: 
-        query = args.get('query',None)
+    
+    # 2. Movimentação do SQL para o ambiente do projeto
+    s3.copy_file(source_file_uri=args['path_sql_origem'], target_folder_uri=structure['sql'])
+    
+    # 3. Leitura do Conteúdo SQL
+    filename = s3.get_filename_from_uri(args['path_sql_origem'])
+    query = s3.get_content_sql(bucket=bucket_name, prefix=f"{project_name}/sql", filename=filename)
     
     return {
         "structure": structure,
@@ -63,22 +62,11 @@ def save_execution_logs(logger, s3_manager, bucket, project_path):
 
 def main():
     # 1. PARÂMETROS DE EXECUÇÃO
-    job_args = {
-        'db': 'workspace_db',
-        'table_name': 'ttest_vendas',
-        'path_sql_origem': 's3://sql-center-903146277540/sql_center/tabela_calendario.sql',
-        'region_name': 'us-east-2',
-        'partition_name': 'anomesdia',
-        'log_level': 'INFO',
-        'job_name': 'ETL_Calendario',
-        'owner': 'Guilherme',
-        'query': '''SELECT 
-            CAST(1001 AS INT) as id_transacao,
-            CAST(50 AS INT) as id_produto,
-            CAST(249.90 AS DECIMAL(10,2)) as valor_venda,
-            CAST('Cartão' AS VARCHAR) as metodo_pagamento,
-            CAST('{anomesdia}' AS VARCHAR) as anomesdia'''
-    }
+    required = ['DB', 'TABLE_NAME', 'PATH_SQL_ORIGEM', 'REGION_NAME', 'PARTITION_NAME']
+    optional = ['REPROCESSAMENTO', 'RANGE_REPROCESSAMENTO', 'DIA_CORTE', 'DEFASAGEM', 'LOG_LEVEL', 'BUCKET_NAME', 'JOB_NAME','OWNER']
+
+    # 2. RESOLUÇÃO DINÂMICA
+    job_args = Utils.resolve_args_glue_params(required, optional)
 
     # 2. INICIALIZAÇÃO DE CONTROLE (Fora do try para estarem visíveis no finally)
     PRODUCT_NAME = "YGGDRA"
@@ -180,10 +168,6 @@ def main():
                 content=metadata_json,
                 extension="json"
             )
-            salvar_arquivo(
-                caminho_pasta='C:/Users/carol/OneDrive/Documentos/Guilherme/Java/AWS_Data_Factory/local/metadata',
-                extensao='.json', conteudo=metadata_json, nome_arquivo="metadata"
-            )
 
         execution_timer.stop()
         logger.info("Lógica de processamento concluída.")
@@ -206,14 +190,6 @@ def main():
                     filename=report_name,
                     content=md_report, extension="md"
                 )
-            
-            # Gravação Local (Sempre tenta se o report existir)
-            salvar_arquivo(
-                caminho_pasta='C:/Users/carol/OneDrive/Documentos/Guilherme/Java/AWS_Data_Factory/local/report',
-                extensao='.md', 
-                conteudo=md_report, 
-                nome_arquivo=f"report_{execution_timestamp}"
-            )
             
             # Print para visibilidade no console
             print("\n" + md_report + "\n")

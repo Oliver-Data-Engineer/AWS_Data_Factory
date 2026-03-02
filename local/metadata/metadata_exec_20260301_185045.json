@@ -1,0 +1,43 @@
+{
+  "execution_id": "exec_20260301_185045",
+  "product": "YGGRA - Data Factory",
+  "environment": {
+    "region": null,
+    "start_at": "2026-03-01T18:50:45.690475+00:00",
+    "end_at": "2026-03-01T18:50:56.751234+00:00"
+  },
+  "parameters": {
+    "db": "workspace_db",
+    "table_name": "calendario_mensal",
+    "path_sql_origem": "s3://sql-center-903146277540/sql_center/tabela_calendario.sql",
+    "region_name": "us-east-2",
+    "partition_name": "anomesdia",
+    "log_level": "INFO",
+    "job_name": "ETL_Calendario",
+    "owner": "Guilherme"
+  },
+  "artifacts": {
+    "s3_structure": {
+      "root": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/calendario_mensal/",
+      "scripts": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/calendario_mensal/scripts/",
+      "data": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/calendario_mensal/data/",
+      "sql": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/calendario_mensal/sql/",
+      "temp": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/calendario_mensal/temp/",
+      "logs": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/calendario_mensal/logs/",
+      "reports": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/calendario_mensal/reports/",
+      "metadata": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/calendario_mensal/metadata/"
+    },
+    "execution_report_uri": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/calendario_mensal/reports/report_20260301_155055.md",
+    "execution_log_uri": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/calendario_mensal/logs/log_execution_20260301_155056.json",
+    "target_table": "None.None"
+  },
+  "metrics": {
+    "partitions_processed": 1,
+    "success_count": 1,
+    "failed_count": 0,
+    "total_duration_sec": 8.66
+  },
+  "lineage": {
+    "sql_applied": "\n    WITH parametro AS (\n    SELECT date_parse('{anomesdia}', '%Y%m%d') AS data_referencia\n),\n\nlimites AS (\n    SELECT\n        date_trunc('month', data_referencia)              AS data_inicio,\n        date_add(\n            'day',\n            -1,\n            date_add('month', 1, date_trunc('month', data_referencia))\n        )                                                 AS data_fim\n    FROM parametro\n)\n\nSELECT\n    d                                           AS data,\n    day(d)                                      AS dia,\n    week(d)                                     AS semana_ano,\n    day_of_week(d)                              AS dia_semana,\n    date_format(d, '%W')                        AS nome_dia,\n    quarter(d)                                  AS trimestre,\n    year(d)                                     AS ano,\n    month(d)                                    AS mes,\n    date_format(d, '%Y%m%d')                    AS anomesdia\nFROM limites\nCROSS JOIN UNNEST(\n    sequence(data_inicio, data_fim, interval '1' day)\n) AS t(d)\nORDER BY data\n\n    "
+  }
+}

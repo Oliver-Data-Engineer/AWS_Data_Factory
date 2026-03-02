@@ -1,12 +1,12 @@
 import sys
 from datetime import datetime
-from Pandora import Utils
-from Pandora.S3Manager import S3Manager
-from Pandora.AthenaManager import AthenaManager
-from Pandora.GlueManager import GlueManager
-from Pandora.genericLogger import GenericLogger
-from Pandora.DataUtils import DataUtils
-from Pandora.ReportManager import ReportManager
+from Yggdra import Utils
+from Yggdra.S3Manager import S3Manager
+from Yggdra.AthenaManager import AthenaManager
+from Yggdra.GlueManager import GlueManager
+from Yggdra.genericLogger import GenericLogger
+from Yggdra.DataUtils import DataUtils
+from Yggdra.ReportManager import ReportManager
 
 # --- CONFIGURAÇÕES E AUXILIARES ---
 

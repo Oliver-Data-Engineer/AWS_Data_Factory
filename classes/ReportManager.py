@@ -31,7 +31,7 @@ class ReportManager:
         duration = round((end_time - self.start_time).total_seconds(), 2)
         
         # Cabeçalho e Metadados
-        md = f"# 🕒 Relatório de Execução - PANDORA FÁBRICA DE SOT\n"
+        md = f"# 🕒 Relatório de Execução - YGGDRA FÁBRICA DE SOT\n"
         md += f"**Status Global:** {'✅ SUCESSO' if not self.errors else '⚠️ FINALIZADO COM ERROS'}\n\n"
         
         md += "### 📋 Parâmetros do Job\n"
@@ -54,5 +54,5 @@ class ReportManager:
                 md += f"- **{err['Etapa']}:** {err['Erro']}\n"
             md += "\n"
 
-        md += "---\n*Relatório gerado automaticamente pelo motor PANDORA FÁBRICA DE SOT*"
+        md += "---\n*Relatório gerado automaticamente pelo motor YGGDRA FÁBRICA DE SOT*"
         return md

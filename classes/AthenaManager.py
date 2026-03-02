@@ -211,3 +211,49 @@ class AthenaManager(AWSClient):
             "status": status, 
             "elapsed_sec": cronometro.elapsed_seconds
         }
+
+    def get_table_ddl(self, database: str, table: str, temp_s3: str) -> Dict[str, Any]:
+        """
+        Extrai o DDL (CREATE TABLE statement) de uma tabela existente no Athena.
+        Útil para persistência de metadados e linhagem no YGGDRA.
+        """
+        cronometro = Clock()
+        cronometro.start()
+        
+        query_sql = f"SHOW CREATE TABLE {database}.{table}"
+        self.logger.info(f"Extraindo DDL da tabela {database}.{table}")
+
+        try:
+            # 1. Executa a query usando o motor padronizado da classe
+            # Isso já garante o wait_for_query e o registro do tempo
+            exec_resp = self.execute_query(query_sql, database, temp_s3)
+            query_id = exec_resp["query_id"]
+
+            # 2. Coleta os resultados da execução
+            results = self.client.get_query_results(QueryExecutionId=query_id)
+            
+            # 3. Processa as linhas do Athena (o DDL vem fragmentado em linhas)
+            # Cada linha do 'SHOW CREATE TABLE' vem como uma VarCharValue única
+            ddl_lines = [
+                row['Data'][0].get('VarCharValue', '') 
+                for row in results['ResultSet']['Rows']
+            ]
+            ddl_final = "\n".join(ddl_lines)
+
+            cronometro.stop()
+            self.logger.info(f"DDL extraído com sucesso em {cronometro.formatted}")
+
+            return {
+                "status": "Success",
+                "database": database,
+                "table": table,
+                "ddl": ddl_final,
+                "query_id": query_id,
+                "elapsed_sec": cronometro.elapsed_seconds,
+                "formatted_time": cronometro.formatted
+            }
+
+        except Exception as e:
+            cronometro.stop()
+            self.logger.error(f"Falha ao extrair DDL de {database}.{table}: {str(e)}")
+            raise
