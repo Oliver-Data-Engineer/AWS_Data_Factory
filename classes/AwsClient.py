@@ -2,9 +2,6 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 
-aws_secret_key = 'anTovkNq9i3DUk0F/Dq7es+MpSnvOPuP9Bhmcdb1'
-aws_access_key = 'AKIA5ER5WRKSIQSLXCNM'
-
 
 class AWSClient:
     def __init__(self, service_name, region_name="us-east-2"):
