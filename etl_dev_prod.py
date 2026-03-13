@@ -69,7 +69,7 @@ def main():
     job_args = Utils.resolve_args_glue_params(required, optional)
 
     # 2. INICIALIZAÇÃO DO LOGGER RAIZ (Timeline do Produto)
-    PRODUCT_NAME = "PANDORA"
+    PRODUCT_NAME = "YGGDRA"
     logger = GenericLogger(name=PRODUCT_NAME, level=job_args['log_level'])
     logger.info(f"🚀 INICIANDO PRODUTO: {PRODUCT_NAME} - FÁBRICA DE SOT")
     logger.info(f'Job Name: {job_args.get("JOB_NAME", "N/A")}')
@@ -183,7 +183,7 @@ def main():
     finally:
         # 8. PERSISTÊNCIA DA TIMELINE COMPLETA (BLACK BOX)
         if s3 and 'bucket' in data_setup:
-            logger.info("Salvando timeline completa do produto PANDORA...")
+            logger.info("Salvando timeline completa do produto YGGDRA...")
             save_execution_logs(logger, s3, data_setup['bucket'], data_setup['project_path'])
         logger.info("Fim da execução Fábrica de SOT.")
 

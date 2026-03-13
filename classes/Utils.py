@@ -11,7 +11,7 @@ class Utils:
     """
     
     # Logger configurado para a classe
-    logger = GenericLogger(name="PANDORA.Utils", level="INFO", propagate=True)
+    logger = GenericLogger(name="YGGDRA.Utils", level="INFO", propagate=True)
 
     @staticmethod
     def resolve_args_glue_params(required_keys: List[str], optional_keys: Optional[List[str]] = None) -> Dict[str, str]:
@@ -119,7 +119,7 @@ class Utils:
                 
                 # Formata a saída para o padrão do GlueManager
                 dados_tabelas.append({
-                    "name": clean_name,
+                    "table": clean_name,
                     "db": clean_db if clean_db else "-",
                     "path": full_identity
                 })

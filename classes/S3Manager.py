@@ -11,7 +11,7 @@ class S3Manager(AWSClient):
     Centraliza lógica de bootstrapping de projetos e manipulação de objetos/partições.
     """
 
-    def __init__(self, region_name: str = "us-east-2", logger_name: str = "PANDORA"):
+    def __init__(self, region_name: str = "us-east-2", logger_name: str = "YGGDRA"):
         super().__init__(service_name="s3", region_name=region_name)
         self.logger = GenericLogger(name=f'{logger_name}.S3', propagate=True)
         self.region = region_name

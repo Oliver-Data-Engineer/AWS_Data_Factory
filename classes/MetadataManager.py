@@ -18,11 +18,25 @@ class MetadataManager:
             "total_duration_sec": 0.0
         }
         self.sql_context = ""
+        self.sources = []  # <--- Nova lista para armazenar as origens
         self.execution_id = f"exec_{self.start_time.strftime('%Y%m%d_%H%M%S')}"
 
     def register_sql(self, sql_content: str):
         """Armazena o código SQL utilizado (versão final)."""
         self.sql_context = sql_content
+
+    def add_source(self, db: str, table: str, partition_type: str, partition_name: str, partition_value: Any):
+        """
+        Adiciona uma tabela de origem ao lineage da execução.
+        """
+        source_entry = {
+            "database": db,
+            "table": table,
+            "partition_type": partition_type,
+            "partition_name": partition_name,
+            "partition_value": partition_value
+        }
+        self.sources.append(source_entry)
 
     def register_artifacts(self, structure: Dict[str, str], report_uri: str = None, log_uri: str = None):
         """Mapeia todos os caminhos físicos envolvidos na execução."""
@@ -30,7 +44,7 @@ class MetadataManager:
             "s3_structure": structure,
             "execution_report_uri": report_uri,
             "execution_log_uri": log_uri,
-            "target_table": f"{self.job_args.get('DB')}.{self.job_args.get('TABLE_NAME')}"
+            "target_table": f"{self.job_args.get('db')}.{self.job_args.get('tabel_name')}"
         }
 
     def update_metrics(self, success: int, failures: int, duration: float):
@@ -48,7 +62,7 @@ class MetadataManager:
             "execution_id": self.execution_id,
             "product": "YGGRA - Data Factory",
             "environment": {
-                "region": self.job_args.get('REGION_NAME'),
+                "region": self.job_args.get('region_name'),
                 "start_at": self.start_time.isoformat(),
                 "end_at": end_time.isoformat(),
             },
@@ -56,7 +70,8 @@ class MetadataManager:
             "artifacts": self.artifacts,
             "metrics": self.metrics,
             "lineage": {
-                "sql_applied": self.sql_context
+                "sql_applied": self.sql_context,
+                "upstream_sources": self.sources 
             }
         }
         return metadata

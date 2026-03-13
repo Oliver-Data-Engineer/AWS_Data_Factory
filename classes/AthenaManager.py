@@ -13,7 +13,7 @@ class AthenaManager(AWSClient):
     Gerencia consultas assíncronas, operações de UNLOAD e CTAS com medição de performance.
     """
 
-    def __init__(self, region_name: str = "us-east-2",logger_name = 'PANDORA'):
+    def __init__(self, region_name: str = "us-east-2",logger_name = 'YGGDRA'):
         super().__init__(service_name="athena", region_name=region_name)
         self.logger = GenericLogger(name=f'{logger_name}.Athena', propagate=True)
         self.glue = GlueManager(region_name=region_name)

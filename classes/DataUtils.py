@@ -43,7 +43,7 @@ class DataUtils:
         range_reprocessamento: int, 
         dia_corte: Optional[int] = None,
         defasagem: int = 0
-    ) -> List[datetime]:
+    ) -> List[datetime]: 
         """
         Calcula a lista base de datas considerando defasagem e reprocessamento.
         """
@@ -60,7 +60,7 @@ class DataUtils:
             anchor = hoje if is_daily else hoje.replace(day=1)
             
             # APLICA A DEFASAGEM: Recua o ponto final antes de qualquer outra lógica
-            dt_fim_dt = anchor - (step * defasagem)
+            dt_fim_dt = anchor - (step * int(defasagem))
             
             # Padrão: Apenas o dia/mês defasado
             dt_ini_dt = dt_fim_dt 
@@ -72,7 +72,7 @@ class DataUtils:
                 
                 if deve_reprocessar:
                     # Recua o range a partir do ponto já defasado
-                    dt_ini_dt = dt_fim_dt - (step * range_reprocessamento)
+                    dt_ini_dt = dt_fim_dt - (step * int(range_reprocessamento))
         
         else:
             # Caso de Datas Manuais (sempre obedece o range informado)

@@ -47,7 +47,7 @@ class GenericLogger:
 
     def __init__(
         self, 
-        name: str = "PANDORA", 
+        name: str = "YGGDRA", 
         level: str = "INFO", 
         propagate: bool = True,
         to_file: Optional[str] = None  # Parâmetro adicionado para evitar o TypeError
@@ -72,7 +72,7 @@ class GenericLogger:
 
         # --- A LÓGICA ANTI-DUPLICIDADE ---
         # Só adicionamos saída de Console/Arquivo se:
-        # A) For o logger raiz (não tem ponto no nome: ex: "PANDORA")
+        # A) For o logger raiz (não tem ponto no nome: ex: "YGGDRA")
         # B) A propagação estiver DESLIGADA (o logger é independente)
         is_root = "." not in self.logger.name
         

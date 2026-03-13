@@ -11,7 +11,7 @@ class Utils:
     """
     
     # Logger configurado para a classe
-    logger = GenericLogger(name="PANDORA.Utils", level="INFO", propagate=True)
+    logger = GenericLogger(name="YGGDRA.Utils", level="INFO", propagate=True)
 
     @staticmethod
     def resolve_args_glue_params(required_keys: List[str], optional_keys: Optional[List[str]] = None) -> Dict[str, str]:
