@@ -3,7 +3,7 @@ import os
 import sqlglot
 from sqlglot import exp
 from typing import List, Dict, Optional, Set, Any
-from .genericLogger import GenericLogger 
+from genericLogger import GenericLogger 
 
 class Utils:
     """
