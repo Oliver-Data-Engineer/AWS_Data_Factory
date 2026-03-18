@@ -146,7 +146,7 @@ class S3Manager(AWSClient):
     def _initialize_bootstrap(self, project_name: str, bucket: str) -> Dict[str, str]:
         """Cria subpastas padrão para um projeto."""
         clean_project = self._normalize_path(project_name)
-        subdirs = ["scripts", "data", "sql", "temp", "logs","reports","metadata"]
+        subdirs = ["scripts", "data", "sql", "temp", "logs","reports","metadata",'audits','configuration']
         
         structure = {"root": self.create_s3_folder(clean_project, bucket=bucket)}
 

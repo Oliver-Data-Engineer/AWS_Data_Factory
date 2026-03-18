@@ -1,0 +1,84 @@
+{
+  "execution_id": "exec_20260318_010629",
+  "product": "YGGRA - Data Factory",
+  "environment": {
+    "region": "us-east-2",
+    "start_at": "2026-03-18T01:06:29.655935+00:00",
+    "end_at": "2026-03-18T01:06:42.428861+00:00"
+  },
+  "parameters": {
+    "db": "workspace_db",
+    "table_name": "tb_visao_cliente_completa",
+    "path_sql_origem": "",
+    "region_name": "us-east-2",
+    "partition_name": "anomesdia",
+    "log_level": "INFO",
+    "job_name": "ETL_Visao_Cliente",
+    "owner": "Guilherme",
+    "query": "\n            with base as (\n                    SELECT \n                        p.pedido_id,\n                        p.cliente_id,\n                        p.valor_total,\n                        f.status_pagamento,\n                        l.transportadora,\n                        l.status_entrega,\n                        c.pagina_acessada,\n                        p.anomesdia\n                    FROM workspace_db.tb_pedidos p\n                    LEFT JOIN workspace_db.tb_faturamento_cliente f \n                        ON p.cliente_id = f.cliente_id\n                    LEFT JOIN workspace_db.tb_logistica l \n                        ON p.pedido_id = l.pedido_id\n                    LEFT JOIN workspace_db.tb_clickstream c \n                        ON p.cliente_id = c.cliente_id\n                    WHERE \n                        -- Forçando o partition pruning em todas as tabelas\n                        cast(p.anomesdia as varchar) = cast('{anomesdia}' as varchar)\n                        AND cast(f.anomes as varchar) = cast('{anomes}' as varchar)\n                        AND cast(l.data as varchar) = cast('{data}' as varchar)\n                        AND cast(c.year as varchar) = cast('{year}' as varchar) AND cast(c.month as varchar) = cast('{month}' as varchar) AND cast(c.day as varchar) = cast('{day}' as varchar)\n\n                    )\n                    select * from base\n            "
+  },
+  "artifacts": {
+    "s3_structure": {
+      "root": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/",
+      "scripts": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/scripts/",
+      "data": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/data/",
+      "sql": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/sql/",
+      "temp": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/temp/",
+      "logs": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/logs/",
+      "reports": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/reports/",
+      "metadata": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/metadata/"
+    },
+    "execution_report_uri": null,
+    "execution_log_uri": null,
+    "target_table": "workspace_db.None"
+  },
+  "metrics": {
+    "partitions_processed": 0,
+    "success_count": 0,
+    "failed_count": 0,
+    "total_duration_sec": 8.32
+  },
+  "lineage": {
+    "sql_applied": "\n            with base as (\n                    SELECT \n                        p.pedido_id,\n                        p.cliente_id,\n                        p.valor_total,\n                        f.status_pagamento,\n                        l.transportadora,\n                        l.status_entrega,\n                        c.pagina_acessada,\n                        p.anomesdia\n                    FROM workspace_db.tb_pedidos p\n                    LEFT JOIN workspace_db.tb_faturamento_cliente f \n                        ON p.cliente_id = f.cliente_id\n                    LEFT JOIN workspace_db.tb_logistica l \n                        ON p.pedido_id = l.pedido_id\n                    LEFT JOIN workspace_db.tb_clickstream c \n                        ON p.cliente_id = c.cliente_id\n                    WHERE \n                        -- Forçando o partition pruning em todas as tabelas\n                        cast(p.anomesdia as varchar) = cast('{anomesdia}' as varchar)\n                        AND cast(f.anomes as varchar) = cast('{anomes}' as varchar)\n                        AND cast(l.data as varchar) = cast('{data}' as varchar)\n                        AND cast(c.year as varchar) = cast('{year}' as varchar) AND cast(c.month as varchar) = cast('{month}' as varchar) AND cast(c.day as varchar) = cast('{day}' as varchar)\n\n                    )\n                    select * from base\n            ",
+    "upstream_sources": [
+      {
+        "database": "workspace_db",
+        "table": "tb_pedidos",
+        "partition_type": "string",
+        "partition_name": "anomesdia",
+        "partition_value": {
+          "anomesdia": "20240310"
+        }
+      },
+      {
+        "database": "workspace_db",
+        "table": "tb_faturamento_cliente",
+        "partition_type": "string",
+        "partition_name": "anomes",
+        "partition_value": {
+          "anomes": "202403"
+        }
+      },
+      {
+        "database": "workspace_db",
+        "table": "tb_logistica",
+        "partition_type": "string",
+        "partition_name": "data",
+        "partition_value": {
+          "data": "2024-03-10"
+        }
+      },
+      {
+        "database": "workspace_db",
+        "table": "tb_clickstream",
+        "partition_type": "string",
+        "partition_name": "year",
+        "partition_value": {
+          "year": "2024",
+          "month": "03",
+          "day": "10"
+        }
+      }
+    ]
+  }
+}

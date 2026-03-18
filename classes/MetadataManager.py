@@ -25,16 +25,18 @@ class MetadataManager:
         """Armazena o código SQL utilizado (versão final)."""
         self.sql_context = sql_content
 
-    def add_source(self, db: str, table: str, partition_type: str, partition_name: str, partition_value: Any):
+    
+    def add_source(self, db: str, table: str, partition_type: str, partition_name: str, partition_value: Any, defasagem: int = 0):
         """
-        Adiciona uma tabela de origem ao lineage da execução.
+        Adiciona uma tabela de origem ao lineage da execução, incluindo seu SLA/Defasagem.
         """
         source_entry = {
             "database": db,
             "table": table,
             "partition_type": partition_type,
             "partition_name": partition_name,
-            "partition_value": partition_value
+            "partition_value": partition_value,
+            "defasagem": defasagem 
         }
         self.sources.append(source_entry)
 

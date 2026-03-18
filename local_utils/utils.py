@@ -111,3 +111,38 @@ class Utils:
             logger.info(f"Upload concluído: {arquivo.name}")
 
         logger.info("Deploy finalizado com sucesso")
+    
+    def salvar_ddl_em_arquivo(ddl_bruto: str, caminho_destino: str, nome_arquivo: str):
+        """
+        Recebe a string do DDL, formata e salva em um arquivo .sql.
+        """
+        # 1. Cria o diretório se não existir
+        os.makedirs(caminho_destino, exist_ok=True)
+        
+        # 2. Garante a extensão correta
+        if not nome_arquivo.endswith('.sql'):
+            nome_arquivo += '.sql'
+            
+        caminho_completo = os.path.join(caminho_destino, nome_arquivo)
+
+        # 3. Formatação avançada
+        try:
+            # O Athena usa a sintaxe do Hive/Presto para os DDLs de criação de tabela.
+            # O pretty=True garante a indentação correta.
+            ddl_formatado = sqlglot.transpile(ddl_bruto, read='hive', write='hive', pretty=True)[0]
+        except Exception as e:
+            print(f"Aviso: Não foi possível aplicar a formatação estrita. Salvando o formato original. Erro: {e}")
+            # Fallback caso o Athena retorne alguma propriedade de SerDe muito customizada
+            ddl_formatado = ddl_bruto
+
+        # 4. Escreve o arquivo
+        with open(caminho_completo, 'w', encoding='utf-8') as arquivo_sql:
+            # Adiciona um comentário útil no topo do arquivo
+            arquivo_sql.write(f"-- DDL extraído do Amazon Athena\n")
+            arquivo_sql.write(f"-- Arquivo gerado automaticamente\n\n")
+            arquivo_sql.write(ddl_formatado)
+            # Adiciona um ponto e vírgula no final, caso não tenha
+            if not ddl_formatado.strip().endswith(';'):
+                arquivo_sql.write(';\n')
+
+        print(f"Sucesso! DDL formatado e salvo em: {caminho_completo}")

@@ -1,6 +1,6 @@
-from classes.S3Manager import S3Manager
-from classes.GlueManager import GlueManager
-from classes.Utils import Utils
+from .S3Manager import S3Manager
+from .GlueManager import GlueManager
+from .Utils import Utils
 from typing import Dict, Any, List
 
 class SourceGuardian:

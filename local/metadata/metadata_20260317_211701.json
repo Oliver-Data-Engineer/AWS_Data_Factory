@@ -1,0 +1,45 @@
+{
+  "execution_id": "exec_20260318_001707",
+  "product": "YGGRA - Data Factory",
+  "environment": {
+    "region": "us-east-2",
+    "start_at": "2026-03-18T00:17:07.560939+00:00",
+    "end_at": "2026-03-18T00:17:22.441151+00:00"
+  },
+  "parameters": {
+    "db": "workspace_db",
+    "table_name": "tb_visao_cliente_completa",
+    "path_sql_origem": "",
+    "region_name": "us-east-2",
+    "partition_name": "anomesdia",
+    "log_level": "INFO",
+    "job_name": "ETL_Visao_Cliente",
+    "owner": "Guilherme",
+    "query": "SELECT \n            p.pedido_id,\n            p.cliente_id,\n            p.valor_total,\n            f.status_pagamento,\n            l.transportadora,\n            l.status_entrega,\n            c.pagina_acessada\n        FROM tb_pedidos p\n        LEFT JOIN tb_faturamento_cliente f \n            ON p.cliente_id = f.cliente_id\n        LEFT JOIN tb_logistica l \n            ON p.pedido_id = l.pedido_id\n        LEFT JOIN tb_clickstream c \n            ON p.cliente_id = c.cliente_id\n        WHERE \n            p.anomesdia = '{anomesdia}'\n            AND f.anomes = '{anomes}'\n            AND l.data = '{data}'\n            AND c.year = '{year}' AND c.month = '{month}' AND c.day = '{day}';"
+  },
+  "artifacts": {
+    "s3_structure": {
+      "root": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/",
+      "scripts": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/scripts/",
+      "data": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/data/",
+      "sql": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/sql/",
+      "temp": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/temp/",
+      "logs": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/logs/",
+      "reports": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/reports/",
+      "metadata": "s3://itau-self-wkp-us-east-2-903146277540/workspace_db/tb_visao_cliente_completa/metadata/"
+    },
+    "execution_report_uri": null,
+    "execution_log_uri": null,
+    "target_table": "workspace_db.None"
+  },
+  "metrics": {
+    "partitions_processed": 0,
+    "success_count": 0,
+    "failed_count": 0,
+    "total_duration_sec": 0.0
+  },
+  "lineage": {
+    "sql_applied": "SELECT \n            p.pedido_id,\n            p.cliente_id,\n            p.valor_total,\n            f.status_pagamento,\n            l.transportadora,\n            l.status_entrega,\n            c.pagina_acessada\n        FROM tb_pedidos p\n        LEFT JOIN tb_faturamento_cliente f \n            ON p.cliente_id = f.cliente_id\n        LEFT JOIN tb_logistica l \n            ON p.pedido_id = l.pedido_id\n        LEFT JOIN tb_clickstream c \n            ON p.cliente_id = c.cliente_id\n        WHERE \n            p.anomesdia = '{anomesdia}'\n            AND f.anomes = '{anomes}'\n            AND l.data = '{data}'\n            AND c.year = '{year}' AND c.month = '{month}' AND c.day = '{day}';",
+    "upstream_sources": []
+  }
+}

@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from typing import List, Union, Any, Optional
+import re
 
 class DataUtils:
     """
@@ -109,3 +110,134 @@ class DataUtils:
             p_type, dt_ini, dt_fim, reprocessamento, range_reprocessamento, dia_corte, defasagem
         )
         return [DataUtils.format_partition(d, p_type) for d in base_dates]
+    
+    @staticmethod
+    def expand_date_variables(partition_value: str) -> dict:
+        """
+        Recebe um valor de partição genérico (ex: '20231027', '2023-10-27', '2023/10/27')
+        e retorna um dicionário com múltiplas variações formatadas para interpolação SQL.
+        """
+        # 1. Remove tudo que não for número para padronizar a leitura
+        clean_val = re.sub(r'\D', '', str(partition_value))
+        
+        try:
+            # 2. Identifica o tamanho para saber até onde a data vai
+            if len(clean_val) == 8:    # YYYYMMDD
+                dt = datetime.strptime(clean_val, '%Y%m%d')
+            elif len(clean_val) == 6:  # YYYYMM
+                dt = datetime.strptime(clean_val, '%Y%m')
+            elif len(clean_val) == 4:  # YYYY
+                dt = datetime.strptime(clean_val, '%Y')
+            else:
+                raise ValueError("Tamanho de data não mapeado")
+
+            # 3. Retorna o dicionário completo com todas as variações
+            return {
+                "anomesdia": dt.strftime('%Y%m%d'),      # 20231027
+                "anomes": dt.strftime('%Y%m'),           # 202310
+                "data": dt.strftime('%Y-%m-%d'),         # 2023-10-27
+                "year": dt.strftime('%Y'),               # 2023
+                "month": dt.strftime('%m'),              # 10
+                "day": dt.strftime('%d')                 # 27
+            }
+            
+        except Exception as e:
+            # Fallback: Se não for uma data (ex: partição por 'categoria'), 
+            # preenchemos tudo com o valor original para evitar KeyErrors no SQL.
+            return {
+                "anomesdia": partition_value,
+                "anomes": partition_value,
+                "data": partition_value,
+                "year": partition_value,
+                "month": partition_value,
+                "day": partition_value
+            }
+    
+    @staticmethod
+    def calcular_defasagem(partition_value: Union[str, dict], partition_type: str = "", defasagem: int = 0) -> Union[str, dict]:
+        """
+        Calcula a partição de defasagem (lag).
+        Suporta strings ('20231027') ou dicionários ({'year': '2024', 'month': '03', 'day': '01'}).
+        """
+        if defasagem == 0:
+            return partition_value
+
+        # ==========================================================
+        # 1. LÓGICA PARA PARTIÇÕES MÚLTIPLAS (Dict: year, month, day)
+        # ==========================================================
+        if isinstance(partition_value, dict):
+            # Normaliza as chaves para minúsculo para facilitar a busca
+            keys = {k.lower(): k for k in partition_value.keys()}
+            
+            try:
+                # Cenário A: Tem year, month e day (Grão: Dia)
+                if 'day' in keys and 'month' in keys and 'year' in keys:
+                    dt = datetime(
+                        int(partition_value[keys['year']]),
+                        int(partition_value[keys['month']]),
+                        int(partition_value[keys['day']])
+                    )
+                    nova_dt = dt - relativedelta(days=defasagem)
+                    
+                    return {
+                        keys['year']: nova_dt.strftime('%Y'),
+                        keys['month']: nova_dt.strftime('%m'),
+                        keys['day']: nova_dt.strftime('%d')
+                    }
+                
+                # Cenário B: Tem apenas year e month (Grão: Mês)
+                elif 'month' in keys and 'year' in keys:
+                    dt = datetime(
+                        int(partition_value[keys['year']]),
+                        int(partition_value[keys['month']]),
+                        1 # Fixa o dia 1 para fazer a conta de meses
+                    )
+                    nova_dt = dt - relativedelta(months=defasagem)
+                    
+                    return {
+                        keys['year']: nova_dt.strftime('%Y'),
+                        keys['month']: nova_dt.strftime('%m')
+                    }
+                
+                # Cenário C: Tem apenas year (Grão: Ano)
+                elif 'year' in keys:
+                    dt = datetime(int(partition_value[keys['year']]), 1, 1)
+                    nova_dt = dt - relativedelta(years=defasagem)
+                    
+                    return {
+                        keys['year']: nova_dt.strftime('%Y')
+                    }
+            except Exception as e:
+                print(f"[DataUtils] Erro na defasagem de dicionário: {e}")
+                return partition_value
+
+        # ==========================================================
+        # 2. LÓGICA PARA PARTIÇÕES SIMPLES (String: anomesdia, etc)
+        # ==========================================================
+        str_val = str(partition_value)
+        part_type_lower = partition_type.lower()
+        has_dash = '-' in str_val
+
+        try:
+            if 'anomesdia' in part_type_lower or 'data' in part_type_lower:
+                dt_format = '%Y-%m-%d' if has_dash else '%Y%m%d'
+                dt = datetime.strptime(str_val, dt_format)
+                nova_dt = dt - relativedelta(days=defasagem)
+                return nova_dt.strftime(dt_format)
+
+            elif 'anomes' in part_type_lower:
+                dt_format = '%Y-%m' if has_dash else '%Y%m'
+                dt = datetime.strptime(str_val, dt_format)
+                nova_dt = dt - relativedelta(months=defasagem)
+                return nova_dt.strftime(dt_format)
+
+            elif 'ano' in part_type_lower or 'year' in part_type_lower:
+                dt = datetime.strptime(str_val, '%Y')
+                nova_dt = dt - relativedelta(years=defasagem)
+                return nova_dt.strftime('%Y')
+
+            return str_val
+
+        except Exception as e:
+            print(f"[DataUtils] Erro ao calcular defasagem de string para {partition_value}: {e}")
+            return str_val

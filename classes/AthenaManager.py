@@ -37,17 +37,21 @@ class AthenaManager(AWSClient):
             
             if status in ["FAILED", "CANCELLED"]:
                 reason = response["QueryExecution"]["Status"].get("StateChangeReason", "Sem motivo informado.")
-                self.logger.error(f"Query {query_id} falhou após {cronometro.formatted}: {reason}")
-                raise RuntimeError(f"Athena Query {status}: {reason}")
+                # Mantemos o log de erro/aviso, mas retornamos o status em vez de dar raise.
+                # Isso permite que quem chamou a função trate a falha de forma estruturada.
+                self.logger.error(f"Query {query_id} encerrou com {status} após {cronometro.formatted}: {reason}")
+                return status
             
             time.sleep(5)
         
+        # O Timeout continua dando raise, pois é uma falha de sistema (loop infinito) 
+        # e não um status retornado pelo motor do Athena.
         raise TimeoutError(f"A query {query_id} excedeu o limite de {timeout}s.")
 
     # --- EXECUÇÃO DE QUERIES (DML / DDL) ---
 
     def execute_query(self, sql: str, database: str, output_s3: str, workgroup: str = "primary") -> Dict:
-        """Executa uma query e retorna um dicionário com ID e tempo decorrido."""
+        """Executa uma query e retorna um dicionário com ID, status, motivo e tempo decorrido."""
         cronometro = Clock()
         cronometro.start()
         
@@ -62,13 +66,20 @@ class AthenaManager(AWSClient):
             )
             query_id = resp["QueryExecutionId"]
             
-            # O wait_for_query já tem seu próprio cronômetro interno para o timeout,
-            # mas o cronômetro desta função mede o tempo total da operação.
+            # Aguarda a query sair dos estados de processamento (QUEUED / RUNNING)
             self._wait_for_query(query_id)
             cronometro.stop()
 
+            # Busca o status oficial de finalização diretamente do Athena
+            exec_info = self.client.get_query_execution(QueryExecutionId=query_id)
+            status_info = exec_info['QueryExecution']['Status']
+            
+            final_status = status_info['State'] # Retorna SUCCEEDED, FAILED ou CANCELLED
+            motivo = status_info.get('StateChangeReason', '') # Captura a mensagem de erro, se houver
+
             return {
-                "status": "Success",
+                "status": final_status,
+                "reason": motivo,
                 "query_id": query_id,
                 "elapsed_sec": cronometro.elapsed_seconds,
                 "formatted_time": cronometro.formatted
@@ -76,7 +87,7 @@ class AthenaManager(AWSClient):
 
         except Exception as e:
             cronometro.stop()
-            self.logger.error(f"Erro ao disparar query no Athena após {cronometro.formatted}: {e}")
+            self.logger.error(f"Erro ao disparar/aguardar query no Athena após {cronometro.formatted}: {e}")
             raise
 
     def unload_to_s3(
@@ -100,6 +111,7 @@ class AthenaManager(AWSClient):
         final_target = f"{target_s3_path.rstrip('/')}/{partition_path}/"
         formatted_inner_sql = sql.format(**sql_params).strip().rstrip(";")
 
+        self.logger.info(f"SQL formatado para UNLOAD:\n{formatted_inner_sql}")
         unload_query = f"""
             UNLOAD ({formatted_inner_sql}) 
             TO '{final_target}' 
@@ -130,6 +142,8 @@ class AthenaManager(AWSClient):
 
         try:
             formatted_sql = sql.format(**sql_params).strip().rstrip(";")
+            self.logger.info(f"SQL formatado para CTAS:\n{formatted_sql}")
+            
         except KeyError as e:
             self.logger.error(f"Parâmetro {e} ausente para o CTAS.")
             raise
@@ -256,4 +270,139 @@ class AthenaManager(AWSClient):
         except Exception as e:
             cronometro.stop()
             self.logger.error(f"Falha ao extrair DDL de {database}.{table}: {str(e)}")
+            raise
+
+    def obter_ddl_tabela_athena(database: str, tabela: str, workgroup: str = 'primary') -> str:
+        """
+        Executa SHOW CREATE TABLE no Athena e retorna o DDL como string.
+        """
+        client = boto3.client('athena')
+        query = f"SHOW CREATE TABLE {database}.{tabela}"
+
+        # 1. Inicia a execução da query
+        try:
+            start_response = client.start_query_execution(
+                QueryString=query,
+                WorkGroup=workgroup
+                # Se não usar Workgroup configurado com bucket de output, 
+                # adicione: ResultConfiguration={'OutputLocation': 's3://seu-bucket-de-logs/'}
+            )
+            query_execution_id = start_response['QueryExecutionId']
+        except Exception as e:
+            raise RuntimeError(f"Erro ao iniciar a query no Athena: {e}")
+
+        # 2. Loop de espera (Polling) para a query finalizar
+        while True:
+            status_response = client.get_query_execution(QueryExecutionId=query_execution_id)
+            status = status_response['QueryExecution']['Status']['State']
+
+            if status == 'SUCCEEDED':
+                break
+            elif status in ['FAILED', 'CANCELLED']:
+                reason = status_response['QueryExecution']['Status'].get('StateChangeReason', 'Motivo desconhecido')
+                raise RuntimeError(f"A query falhou com status {status}. Motivo: {reason}")
+            
+            # Aguarda 1 segundo antes de checar novamente para não estourar o limite da API
+            time.sleep(1)
+
+        # 3. Busca os resultados da query
+        results_response = client.get_query_results(QueryExecutionId=query_execution_id)
+
+        # 4. Processa o JSON para extrair o texto do DDL
+        linhas_ddl = []
+        
+        # O Athena retorna os dados dentro de ['ResultSet']['Rows']
+        for row in results_response['ResultSet']['Rows']:
+            # Cada linha tem um array 'Data'. Pegamos a primeira coluna [0].
+            # Usamos .get('VarCharValue') para evitar erros caso a linha venha vazia
+            valor_coluna = row['Data'][0].get('VarCharValue', '')
+            
+            # O Athena costuma retornar o nome da coluna ('createtab_stmt') na primeira linha. 
+            # Ignoramos essa linha de cabeçalho.
+            if valor_coluna and valor_coluna != 'createtab_stmt':
+                linhas_ddl.append(valor_coluna)
+
+        # 5. Junta todas as linhas com quebra de linha para formar a string final
+        ddl_completo = '\n'.join(linhas_ddl)
+        
+        return ddl_completo
+    
+    
+    def count_linhas_particao(self, database: str, tabela: str, particao: Dict[str, str], output_s3: str, workgroup: str = "primary") -> Dict[str, Any]:
+        """
+        Executa um COUNT(*) em uma partição específica e retorna o valor junto com as métricas.
+        
+        Args:
+            database: Nome do banco de dados no Athena.
+            tabela: Nome da tabela.
+            particao: Dicionário com as chaves e valores da partição. Ex: {'anomesdia': '20240309'}
+            output_s3: Caminho do S3 para salvar os resultados temporários do Athena.
+            workgroup: Workgroup do Athena.
+        """
+        cronometro = Clock()
+        cronometro.start()
+        
+        # 1. Monta a cláusula WHERE dinamicamente com base no dicionário
+        clausulas_where = [f"{coluna} = '{valor}'" for coluna, valor in particao.items()]
+        where_sql = " AND ".join(clausulas_where)
+        
+        sql = f"SELECT COUNT(*) AS total_linhas FROM {database}.{tabela} WHERE {where_sql}"
+        
+        clean_output = output_s3 if output_s3.startswith("s3://") else f"s3://{output_s3}"
+        
+        try:
+            # 2. Inicia a query
+            resp = self.client.start_query_execution(
+                QueryString=sql,
+                QueryExecutionContext={"Database": database},
+                ResultConfiguration={"OutputLocation": clean_output},
+                WorkGroup=workgroup
+            )
+            query_id = resp["QueryExecutionId"]
+            
+            # 3. Aguarda a execução usando o método ajustado
+            status = self._wait_for_query(query_id)
+            cronometro.stop()
+            
+            # 4. Busca as estatísticas de execução (mesmo se falhar, o Athena devolve o tempo gasto na fila)
+            exec_info = self.client.get_query_execution(QueryExecutionId=query_id)
+            stats = exec_info['QueryExecution'].get('Statistics', {})
+            
+            dados_lidos_bytes = stats.get('DataScannedInBytes', 0)
+            tempo_motor_ms = stats.get('EngineExecutionTimeInMillis', 0)
+            
+            # Monta a estrutura base do retorno
+            resultado = {
+                "status": status,
+                "query_id": query_id,
+                "elapsed_sec": cronometro.elapsed_seconds,
+                "formatted_time": cronometro.formatted,
+                "metrics": {
+                    "data_scanned_bytes": dados_lidos_bytes,
+                    "data_scanned_mb": round(dados_lidos_bytes / (1024 * 1024), 4),
+                    "engine_execution_time_ms": tempo_motor_ms
+                },
+                "count": None,
+                "reason": exec_info['QueryExecution']['Status'].get('StateChangeReason', '')
+            }
+            
+            # 5. Se a query teve sucesso, busca o resultado numérico do COUNT
+            if status == "SUCCEEDED":
+                results = self.client.get_query_results(QueryExecutionId=query_id)
+                
+                # Navegação no JSON de resposta do Athena:
+                # results['ResultSet']['Rows'][0] -> Cabeçalho (ex: 'total_linhas')
+                # results['ResultSet']['Rows'][1] -> Primeira linha de dados com o valor
+                valor_str = results['ResultSet']['Rows'][1]['Data'][0].get('VarCharValue', '0')
+                resultado["count"] = int(valor_str)
+                
+                if hasattr(self, 'logger'):
+                    self.logger.info(f"Partição {particao} da tabela {tabela} possui {resultado['count']} linhas. Lidos: {resultado['metrics']['data_scanned_mb']} MB.")
+                
+            return resultado
+
+        except Exception as e:
+            cronometro.stop()
+            if hasattr(self, 'logger'):
+                self.logger.error(f"Erro ao contar linhas na particao após {cronometro.formatted}: {e}")
             raise

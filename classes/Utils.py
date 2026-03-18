@@ -119,10 +119,52 @@ class Utils:
                 
                 # Formata a saída para o padrão do GlueManager
                 dados_tabelas.append({
-                    "table": clean_name,
-                    "db": clean_db if clean_db else "-",
-                    "path": full_identity
+                    "table": clean_name if clean_name else None,
+                    "db": clean_db if clean_db else None,
+                    "path": full_identity if full_identity else None
                 })
 
         Utils.logger.info(f"Linhagem SQL: {len(dados_tabelas)} origens externas detectadas.")
         return dados_tabelas
+    
+    def formatar_ddl_athena(raw_ddl: str) -> str:
+        """
+        Recebe uma string de DDL bruto do Athena e retorna a versão indentada e formatada.
+        Em caso de falha no parser, aplica uma formatação básica via manipulação de texto.
+        """
+        if not raw_ddl:
+            return ""
+
+        try:
+            # Tenta formatar usando a gramática do Hive, que é a base do DDL do Athena
+            ddl_formatado = sqlglot.transpile(
+                raw_ddl, 
+                read='hive', 
+                write='hive', 
+                pretty=True
+            )[0]
+            
+            # Garante o fechamento correto do comando
+            if not ddl_formatado.strip().endswith(';'):
+                ddl_formatado += ';'
+                
+            return ddl_formatado
+            
+        except Exception as e:
+            # Fallback: Se o DDL tiver propriedades complexas que quebrem o parser
+            print(f"Aviso [utils.formatar_ddl_athena]: Usando formatação básica. Erro do parser: {e}")
+            
+            # Quebras de linha estratégicas para melhorar a legibilidade
+            ddl_basico = raw_ddl.replace("CREATE EXTERNAL TABLE", "CREATE EXTERNAL TABLE\n ")
+            ddl_basico = ddl_basico.replace("PARTITIONED BY", "\nPARTITIONED BY")
+            ddl_basico = ddl_basico.replace("ROW FORMAT", "\nROW FORMAT")
+            ddl_basico = ddl_basico.replace("STORED AS", "\nSTORED AS")
+            ddl_basico = ddl_basico.replace("LOCATION", "\nLOCATION")
+            ddl_basico = ddl_basico.replace("TBLPROPERTIES", "\nTBLPROPERTIES")
+            
+            if not ddl_basico.strip().endswith(';'):
+                ddl_basico += ';'
+                
+            return ddl_basico.strip()
+        
+        
